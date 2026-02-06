@@ -34,3 +34,9 @@ android_project/local.properties
 # android_project/app/src/main/assets/prior_depth_anything.onnx
 # Keeping assets tracked unless too large. keeping previous ignore for assets if intended:
 android_project/app/src/main/assets
+
+*.mlpackage
+*.onnx
+*.bin
+*.pth
+*.pt

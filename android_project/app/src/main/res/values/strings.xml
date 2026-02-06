@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">PriorDepth</string>
+    <string-array name="model_options">
+        <item>FP32 (Original)</item>
+        <item>FP16 (Half Precision)</item>
+        <item>INT8 (Quantized)</item>
+    </string-array>
+</resources>

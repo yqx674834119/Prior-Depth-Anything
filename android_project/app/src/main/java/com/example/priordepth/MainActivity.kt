@@ -40,6 +40,9 @@ class MainActivity : AppCompatActivity() {
     
     private var ortEnv: OrtEnvironment? = null
     private var ortSession: OrtSession? = null
+    private var currentModelName = "prior_depth_anything_vits.onnx"
+    
+    private lateinit var spinnerModel: android.widget.Spinner
     
     private var rgbBitmap: Bitmap? = null
     private var priorBitmap: Bitmap? = null
@@ -74,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         tvStats = findViewById(R.id.tvStats)
         tvHardware = findViewById(R.id.tvHardware)
+        spinnerModel = findViewById(R.id.spinnerModel)
         
         findViewById<Button>(R.id.btnSelectRGB).setOnClickListener { pickRGB.launch("image/*") }
         findViewById<Button>(R.id.btnSelectPrior).setOnClickListener { pickPrior.launch("image/*") }
@@ -91,15 +95,37 @@ class MainActivity : AppCompatActivity() {
             runBenchmark()
         }
         
+        spinnerModel.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                val newModel = when(position) {
+                    0 -> "prior_depth_anything_vits.onnx"
+                    1 -> "prior_depth_anything_vits_fp16.onnx"
+                    2 -> "prior_depth_anything_vits_int8.onnx"
+                    else -> "prior_depth_anything_vits.onnx"
+                }
+                if (newModel != currentModelName) {
+                    currentModelName = newModel
+                    loadModel()
+                }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+        
         // Initialize model in background
         loadModel()
     }
     
     private fun loadModel() {
+        // Close previous session if exists
+        try {
+            ortSession?.close()
+            ortSession = null
+        } catch (e: Exception) {}
+
         lifecycleScope.launch(Dispatchers.Default) {
              try {
                  withContext(Dispatchers.Main) { 
-                     tvStatus.text = "Loading model..." 
+                     tvStatus.text = "Loading ${currentModelName}..." 
                      findViewById<Button>(R.id.btnRun).isEnabled = false
                  }
                  
@@ -108,9 +134,9 @@ class MainActivity : AppCompatActivity() {
                  }
                  
                  // Copy model to cache dir if not exists
-                 val modelFile = java.io.File(cacheDir, "prior_depth_anything.onnx")
+                 val modelFile = java.io.File(cacheDir, currentModelName)
                  if (!modelFile.exists()) {
-                     assets.open("prior_depth_anything_vits.onnx").use { input ->
+                     assets.open(currentModelName).use { input ->
                          java.io.FileOutputStream(modelFile).use { output ->
                              input.copyTo(output)
                          }
@@ -134,7 +160,7 @@ class MainActivity : AppCompatActivity() {
                  ortSession = ortEnv?.createSession(modelFile.absolutePath, opts)
                  
                  withContext(Dispatchers.Main) {
-                     tvStatus.text = "Model Loaded"
+                     tvStatus.text = "Model Loaded: $currentModelName"
                      findViewById<Button>(R.id.btnRun).isEnabled = true
                      tvHardware.text = if (nnapiEnabled) "Hardware: NNAPI (GPU/NPU)" else "Hardware: CPU + 4 Threads"
                  }
