@@ -33,6 +33,10 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    
+    aaptOptions {
+        noCompress += "onnx"
+    }
 }
 
 dependencies {
