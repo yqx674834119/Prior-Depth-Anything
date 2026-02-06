@@ -4,3 +4,13 @@ output/
 
 *.png
 *.jpg
+__pycache__/
+*.pyc
+
+# Models
+*.pth
+*.onnx
+*.mlpackage/
+
+# Generated Assets
+android_project/app/src/main/assets/*.onnx
