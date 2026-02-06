@@ -7,10 +7,30 @@ output/
 __pycache__/
 *.pyc
 
-# Models
-*.pth
-*.onnx
-*.mlpackage/
+# Android/Gradle
+.gradle/
+local.properties
+.idea/
+.vscode/
+*.iml
+*.log
+*.hprof
+*.bak
+.DS_Store
 
-# Generated Assets
-android_project/app/src/main/assets/*.onnx
+# Build directories
+build/
+app/build/
+android_project/build/
+android_project/app/build/
+android_project/.gradle/
+android_project/local.properties
+
+# Native build
+.cxx/
+.externalNativeBuild/
+
+# Model / Large assets (optional, but good if copied)
+# android_project/app/src/main/assets/prior_depth_anything.onnx
+# Keeping assets tracked unless too large. keeping previous ignore for assets if intended:
+android_project/app/src/main/assets

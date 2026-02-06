@@ -62,12 +62,34 @@
     </LinearLayout>
 
     <Button
-        android:id="@+id/btnRun"
+        android:id="@+id/btnLoadSample"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Run Inference"
-        android:layout_marginTop="24dp"
-        android:backgroundTint="#2196F3"/>
+        android:text="Load Sample"
+        android:layout_marginTop="8dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="24dp">
+
+        <Button
+            android:id="@+id/btnRun"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Run Inference"
+            android:backgroundTint="#2196F3"
+            android:layout_marginEnd="8dp"/>
+            
+        <Button
+            android:id="@+id/btnBenchmark"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="FPS Test"
+            android:backgroundTint="#FF9800"/>
+    </LinearLayout>
     
     <TextView
         android:id="@+id/tvStatus"
@@ -75,6 +97,23 @@
         android:layout_height="wrap_content"
         android:text="Ready"
         android:layout_marginTop="8dp"/>
+
+    <TextView
+        android:id="@+id/tvStats"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#FF5722"
+        android:layout_marginTop="4dp"/>
+
+    <TextView
+        android:id="@+id/tvHardware"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hardware: Checking..."
+        android:textColor="#3F51B5"
+        android:layout_marginTop="4dp"
+        android:textStyle="bold"/>
 
     <ImageView
         android:id="@+id/ivResult"
