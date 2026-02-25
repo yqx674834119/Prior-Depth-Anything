@@ -11,7 +11,7 @@ def quantize_models(input_model_path):
     try:
         from onnxconverter_common import float16
         model = onnx.load(input_model_path)
-        fp16_model = float16.convert_float_to_float16(model)
+        fp16_model = float16.convert_float_to_float16(model, keep_io_types=True)
         onnx.save(fp16_model, fp16_model_path)
         print("Float16 conversion complete.")
     except ImportError:
