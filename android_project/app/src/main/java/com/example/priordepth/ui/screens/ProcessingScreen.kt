@@ -18,22 +18,53 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun ProcessingScreen(onProcessingComplete: () -> Unit, onCancel: () -> Unit) {
+fun ProcessingScreen(onProcessingComplete: (String, String) -> Unit, onCancel: () -> Unit) {
     var progress by remember { mutableStateOf(0f) }
-    var stage by remember { mutableStateOf("Syncing Data...") }
+    var stage by remember { mutableStateOf("Initializing ONNX Runtime...") }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Fake processing simulation
     LaunchedEffect(Unit) {
-        while (progress < 1f) {
-            delay(100)
-            progress += 0.02f
-            if (progress > 0.3f && progress < 0.7f) {
-                stage = "Stage 2: Sparse to Dense Interpolation"
-            } else if (progress >= 0.7f) {
-                stage = "Stage 3: Mesh Generation"
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            progress = 0.1f
+            stage = "Validating Inputs..."
+            
+            val rgbBmp = com.example.priordepth.logic.SharedData.capturedRgbBitmap
+            val depthMm = com.example.priordepth.logic.SharedData.capturedDepthMm
+            
+            if (rgbBmp == null || depthMm == null) {
+                stage = "Error: Missing Sensor Data"
+                return@withContext
+            }
+
+            progress = 0.3f
+            stage = "Warming up NPU/CPU Engine..."
+            com.example.priordepth.logic.DepthInferencer.init(context)
+
+            progress = 0.6f
+            stage = "Fusing Optical & ToF Data..."
+            
+            // Execute the model
+            val resultBmp = com.example.priordepth.logic.DepthInferencer.runInference(rgbBmp, depthMm)
+
+            progress = 0.9f
+            stage = "Exporting Point Cloud Mesh..."
+
+            if (resultBmp != null) {
+                // Save RGB and Depth back to disk to pass them to OpenGL Activity
+                val rgbFile = java.io.File(context.cacheDir, "last_rgb.png")
+                val depthFile = java.io.File(context.cacheDir, "last_depth.png")
+                
+                rgbBmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, rgbFile.outputStream())
+                resultBmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, depthFile.outputStream())
+
+                progress = 1.0f
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onProcessingComplete(rgbFile.absolutePath, depthFile.absolutePath)
+                }
+            } else {
+                stage = "Failed: Inference Error"
             }
         }
-        onProcessingComplete()
     }
 
     Column(

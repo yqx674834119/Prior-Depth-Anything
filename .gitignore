@@ -1,11 +1,9 @@
 eval/
-prior_depth_anything.egg-info/
 output/
 
-*.png
-*.jpg
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
 
 # Android/Gradle
 .gradle/
@@ -40,3 +38,13 @@ android_project/app/src/main/assets
 *.bin
 *.pth
 *.pt
+tmp/
+
+resource/
+!resource/
+resource/*
+!resource/ToFSense/
+resource/ToFSense/*
+resource/ToFSense/Calib_DELTAR/
+!resource/ToFSense/Calib_DELTAR_export/
+!resource/ToFSense/Calib_DELTAR_export/**

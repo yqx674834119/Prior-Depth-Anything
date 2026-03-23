@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.priordepth.R
-import com.example.priordepth.logic.UdpViewModel
+import com.example.priordepth.data.DeviceInterface
 
 // Design System Colors
 private val BgColor = Color(0xFF121212)
@@ -34,12 +34,8 @@ private val IconGrey = Color(0xFF888888)
 
 @Composable
 fun HomeScreen(
-    viewModel: UdpViewModel,
     onNewScanClick: () -> Unit = {}
 ) {
-    val connStatus by viewModel.connectionStatus.collectAsState()
-    val isConnected = connStatus.startsWith("Connected")
-
     Box(modifier = Modifier.fillMaxSize().background(BgColor)) {
         
         Column(
@@ -55,11 +51,7 @@ fun HomeScreen(
             ) {
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
-                    if (isConnected) {
-                        ConnectedHardwareCard()
-                    } else {
-                        DisconnectedHardwareCard(statusText = connStatus, onConnectClick = { viewModel.startConnection() })
-                    }
+                    DeviceInterfaceCard()
                 }
                 
                 item {
@@ -106,6 +98,57 @@ fun HomeScreen(
             CustomBottomDock(
                 modifier = Modifier.align(Alignment.BottomCenter),
                 onScanClick = onNewScanClick
+            )
+        }
+    }
+}
+
+@Composable
+fun DeviceInterfaceCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .border(1.5.dp, CyanAccent.copy(alpha = 0.6f), RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceColor)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "固定通信接口",
+                color = CyanAccent,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Wi-Fi: ${DeviceInterface.softApSsid}",
+                color = TextPrimary,
+                fontSize = 15.sp
+            )
+            Text(
+                text = "相机: ${DeviceInterface.cameraUrl}",
+                color = TextPrimary,
+                fontSize = 15.sp
+            )
+            Text(
+                text = "深度: TCP ${DeviceInterface.defaultHost}:${DeviceInterface.tofTcpPort}",
+                color = TextPrimary,
+                fontSize = 15.sp
+            )
+            Text(
+                text = "数据格式: {\"${DeviceInterface.tofJsonKey}\":[64个毫米值]}",
+                color = TextSecondary,
+                fontSize = 13.sp
+            )
+            Text(
+                text = "扫描页会自动连接设备，无需再走旧 UDP 握手流程。",
+                color = TextSecondary,
+                fontSize = 13.sp
             )
         }
     }
@@ -240,7 +283,7 @@ fun ConnectedHardwareCard() {
 }
 
 @Composable
-fun DisconnectedHardwareCard(statusText: String, onConnectClick: () -> Unit) {
+fun DisconnectedHardwareCard(onConnectClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()

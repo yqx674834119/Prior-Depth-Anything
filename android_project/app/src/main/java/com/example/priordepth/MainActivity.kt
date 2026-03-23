@@ -12,8 +12,6 @@ import com.example.priordepth.ui.screens.PreviewScreen
 import com.example.priordepth.ui.screens.ProcessingScreen
 import com.example.priordepth.ui.screens.ScanningScreen
 import com.example.priordepth.ui.theme.PriorDepthTheme
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.priordepth.logic.UdpViewModel
 
 import androidx.activity.enableEdgeToEdge
 
@@ -32,13 +30,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    val udpViewModel: UdpViewModel = viewModel()
     
     NavHost(navController = navController, startDestination = "home") {
         
         composable("home") {
             HomeScreen(
-                viewModel = udpViewModel,
                 onNewScanClick = {
                     navController.navigate("scan")
                 }
@@ -59,10 +55,16 @@ fun AppNavigation() {
         }
         
         composable("processing") {
+            val context = androidx.compose.ui.platform.LocalContext.current
             ProcessingScreen(
-                onProcessingComplete = {
-                    navController.navigate("preview") {
-                        popUpTo("processing") { inclusive = true }
+                onProcessingComplete = { rgbPath, depthPath ->
+                    val intent = android.content.Intent(context, PointCloudActivity::class.java).apply {
+                        putExtra("RGB_PATH", rgbPath)
+                        putExtra("DEPTH_PATH", depthPath)
+                    }
+                    context.startActivity(intent)
+                    navController.navigate("home") {
+                        popUpTo("home") { inclusive = true }
                     }
                 },
                 onCancel = {

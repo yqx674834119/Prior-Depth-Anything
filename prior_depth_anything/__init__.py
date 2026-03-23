@@ -329,7 +329,7 @@ class PriorDepthAnything(nn.Module):
             else:
                 dir_name = '.'
                 
-            parent = datetime.now().strftime("%Y-%m-%d %H:%M")
+            parent = datetime.now().strftime("%Y-%m-%d %H-%M")
             log_dir = os.path.join(self.args.log_dir, parent)
             os.makedirs(log_dir, exist_ok=True)
             self.analyze_results(prior_depth, pred_depth, sparse_depth, log_dir, dir_name)

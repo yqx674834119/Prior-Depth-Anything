@@ -2,16 +2,10 @@ package com.example.priordepth.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.util.Log
-import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,21 +19,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.priordepth.R
+import com.example.priordepth.data.DeviceInterface
+import com.example.priordepth.data.TofRepository
+import kotlinx.coroutines.isActive
 
 // Future-Tech Colors
 private val ThermalBlue = Color(0xFF0038FF)
@@ -60,10 +57,16 @@ fun ScanningScreen(
     onBack: () -> Unit
 ) {
     var mode by remember { mutableStateOf(ScanMode.FUSION) }
-    // Simulated depth in meters
-    val distance by remember { mutableStateOf(1.5f) }
-
+    var latestBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    
     val context = LocalContext.current
+    val tofRepository = remember { TofRepository() }
+    val depthData by tofRepository.depthData.collectAsState()
+
+    // Use center pixel (e.g. index 36) for the distance readout
+    val centerDepthMm = depthData[36]
+    val distance = if (centerDepthMm > 0) centerDepthMm / 1000f else 0f
+
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -85,11 +88,64 @@ fun ScanningScreen(
             launcher.launch(Manifest.permission.CAMERA)
         }
     }
+    
+    DisposableEffect(Unit) {
+        tofRepository.connect()
+        onDispose {
+            tofRepository.disconnect()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // 1. Live Camera Background (if permission granted)
+        // 1. Live Camera Background (From ESP32 WiFi Stream) & ToF Overlay
         if (hasCameraPermission) {
-            CameraPreview()
+                // Container for true 4:3 alignment (640x480)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(4f / 3f)
+                        .align(Alignment.Center)
+                ) {
+                    // We stream the 640x480 natively now fetching isolated JPEGs perfectly
+                    NativeCameraStream(
+                        url = DeviceInterface.cameraUrl,
+                        onBitmapFrame = { bmp -> latestBitmap = bmp }
+                    )
+                    
+                    // 8x8 ToF Data Visualization Overlay
+                    if (mode == ScanMode.FUSION) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cols = 8
+                            val rows = 8
+                            val cellWidth = size.width / cols
+                            val cellHeight = size.height / rows
+                            
+                            for (i in 0 until 64) {
+                                val row = i / cols
+                                val col = i % cols
+                                val mm = depthData[i]
+                                
+                                if (mm <= 0) continue // Skip invalid
+                                
+                                // Map depth (mm) to Color (0m -> 5m max)
+                                val maxMm = 5000f
+                                val ratio = (mm / maxMm).coerceIn(0f, 1f)
+                                
+                                // Simple Thermal Mapping (Red -> Yellow -> Green -> Blue)
+                                val r = ((1f - ratio) * 255).toInt()
+                                val b = (ratio * 255).toInt()
+                                val g = (if (ratio < 0.5f) ratio * 2 * 255 else (1f - ratio) * 2 * 255).toInt()
+                                
+                                // Set alpha to 150 (about 60% opacity) to see through to camera
+                                drawRect(
+                                    color = Color(r, g, b, 150),
+                                    topLeft = Offset(col * cellWidth, row * cellHeight),
+                                    size = Size(cellWidth, cellHeight)
+                                )
+                            }
+                        }
+                    }
+                }
         } else {
             // Fallback while waiting for permission or if denied
             Box(
@@ -133,7 +189,11 @@ fun ScanningScreen(
             BottomControls(
                 mode = mode,
                 onModeChange = { mode = it },
-                onCaptureClick = onCaptureComplete,
+                onCaptureClick = { 
+                    com.example.priordepth.logic.SharedData.capturedRgbBitmap = latestBitmap
+                    com.example.priordepth.logic.SharedData.capturedDepthMm = depthData.clone()
+                    onCaptureComplete()
+                },
                 onCancelClick = onBack,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
@@ -142,48 +202,72 @@ fun ScanningScreen(
 }
 
 @Composable
-fun CameraPreview() {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+fun NativeCameraStream(url: String, onBitmapFrame: (android.graphics.Bitmap) -> Unit, modifier: Modifier = Modifier) {
+    var errorMsg by remember { mutableStateOf("Connecting to ESP32...") }
+    var currentBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { ctx ->
-            PreviewView(ctx).apply {
-                this.scaleType = PreviewView.ScaleType.FILL_CENTER
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            }
-        },
-        update = { previewView ->
-            cameraProviderFuture.addListener({
-                val cameraProvider = cameraProviderFuture.get()
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-                
-                // Select back camera as a default
-                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
+    LaunchedEffect(url) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            while (isActive) {
+                var connection: java.net.HttpURLConnection? = null
                 try {
-                    // Unbind use cases before rebinding
-                    cameraProvider.unbindAll()
-
-                    // Bind use cases to camera
-                    cameraProvider.bindToLifecycle(
-                        lifecycleOwner,
-                        cameraSelector,
-                        preview
-                    )
-                } catch(exc: Exception) {
-                    Log.e("CameraPreview", "Use case binding failed", exc)
+                    connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    connection.connectTimeout = 3000
+                    connection.readTimeout = 3000
+                    connection.requestMethod = "GET"
+                    connection.connect()
+                    
+                    if (connection.responseCode == 200) {
+                        val bytes = connection.inputStream.readBytes()
+                        val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        if (bmp != null) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                currentBitmap = bmp
+                                errorMsg = "Connected"
+                                onBitmapFrame(bmp)
+                            }
+                        }
+                    } else {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            errorMsg = "HTTP Error: ${connection.responseCode}"
+                        }
+                    }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        errorMsg = "Network Error: ${e.message}"
+                    }
+                } finally {
+                    connection?.disconnect()
                 }
-            }, ContextCompat.getMainExecutor(context))
+                // Don't smash the ESP32, give it 33ms breathing room (~30fps max)
+                kotlinx.coroutines.delay(33) 
+            }
         }
-    )
+    }
+
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+        if (currentBitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = currentBitmap!!.asImageBitmap(),
+                contentDescription = "Live Camera Feed",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillBounds
+            )
+        } else {
+            // Debug Text
+            androidx.compose.material3.Text(
+                text = "📡 JPEG POLLING DEBUG INFO\nStatus: $errorMsg\nTarget: $url",
+                color = Color.Yellow,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(8.dp)
+                    .background(Color.Black.copy(alpha=0.7f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                    .padding(8.dp)
+            )
+        }
+    }
 }
 
 @Composable
